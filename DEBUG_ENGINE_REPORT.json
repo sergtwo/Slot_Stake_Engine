@@ -1,0 +1,79 @@
+{
+  "url": "http://localhost:3000/gs2c/html5Game.do?symbol=vs20wraanu&lang=fr&cur=USD",
+  "time": "2026-09-14T08:53:02.831Z",
+  "Time_frameCount": 0,
+  "Time_time": 68.6150000000017,
+  "globalRuntime_sceneRoots": [
+    {
+      "i": 0,
+      "name": "ClientRoot",
+      "compCount": 28
+    },
+    {
+      "i": 1,
+      "name": "GameRoot",
+      "compCount": 3060
+    },
+    {
+      "i": 2,
+      "name": "ClientRoot",
+      "compCount": 39
+    },
+    {
+      "i": 3,
+      "name": "ClientRoot",
+      "compCount": 39
+    }
+  ],
+  "serverLink": {
+    "isReady": true,
+    "connsCount": 1
+  },
+  "gameConnection": {
+    "symbol": "vs20wraanu",
+    "requestState": 0,
+    "queuedState": 15,
+    "responseReceived": false,
+    "hasResponse": true,
+    "responseLen": 963,
+    "responseHead": "def_s=3,4,5,6,7,8,9,10,11,12,3,4,5,6,7,8,9,10,11,12,3,4,5,6,7,8,9,10,11,12&balance=10000.00&balance_cash=10000.00&balance_bonus=0.00&c=0.01&defc=0.01&l=20&sc=0.01,0.02,0.05,0.10,0.25,0.50,1.00,2.00,5."
+  },
+  "gameLogicRuntime": {
+    "currentStage": "StageInit",
+    "started": true,
+    "listOfStages": [
+      "StageInit",
+      "StageResult",
+      "StageSpin",
+      "StageGamble",
+      "StageResultFreeSpin",
+      "StageBonusSimpleWindow",
+      "StageTransition"
+    ]
+  },
+  "stageInit": {
+    "initReceived": false,
+    "introClosed": false,
+    "canGoToNextStage": false,
+    "waitForCustomDataInit": true,
+    "globalResourcesNeededList": 0
+  },
+  "videoSlotsConnectionXT": {
+    "gameSymbol": "vs20wraanu",
+    "hasVsc": true,
+    "handlerGameInitReceived": true,
+    "settingsReceived": true,
+    "commonSettingsReceived": true,
+    "resourcesLoaded": true,
+    "canTriggerInitReady": true
+  },
+  "UHT_CONFIG": {
+    "GAME_URL": "/gs2c/common/v3/games-html5/games/vs/vs20wraanu/desktop/",
+    "GAME_URL_ALTERNATIVE": "/gs2c/common/v3/games-html5/games/vs/vs20wraanu/desktop/",
+    "LANGUAGE": "fr",
+    "SYMBOL": "vs20wraanu",
+    "MINI_MODE": false,
+    "LOBBY_LAUNCHED": false,
+    "STYLENAME": "rare_stake"
+  }
+}

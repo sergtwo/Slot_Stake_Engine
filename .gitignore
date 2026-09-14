@@ -1,0 +1,33 @@
+# Node & npm
+node_modules/
+package-lock.json
+npm-debug.log*
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# OS & Editors
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Large binaries & traces
+*.har
+*.tmp
+temp_orig.js
+test_patch.js
+debug_screenshot.png
+debug_console_messages.json
+console_logs.txt
+canvas_dump_*.png
+frame_rendered.png
+page_screenshot.png
+tmp/
