@@ -1,5 +1,4 @@
 import * as PIXI from 'pixi.js';
-import { SYMBOLS } from './serverSimulator.js';
 
 export class SlotEngine {
   constructor(canvasContainer) {
@@ -98,7 +97,6 @@ export class SlotEngine {
       this.stage.addChild(this.anubisSprite);
       this.positionAnubis();
 
-      // Légère respiration (idle animation)
       let time = 0;
       this.app.ticker.add((ticker) => {
         time += ticker.deltaTime * 0.03;
@@ -119,7 +117,6 @@ export class SlotEngine {
     }
     this.anubisSprite.visible = true;
 
-    // Placé à droite de l'écran, majestueux
     const targetH = this.app.screen.height * 0.88;
     const scale = targetH / this.anubisSprite.texture.height;
     this.anubisSprite.scale.set(scale);
@@ -144,24 +141,20 @@ export class SlotEngine {
     const gridW = this.cols * (this.symbolSize + this.spacing) - this.spacing;
     const gridH = this.rows * (this.symbolSize + this.spacing) - this.spacing;
 
-    // Décentré légèrement vers la gauche sur Desktop pour laisser la place à Anubis
     const offsetX = isMobile ? (this.app.screen.width - gridW) / 2 : (this.app.screen.width * 0.44 - gridW / 2);
     const offsetY = (this.app.screen.height - gridH) / 2 + 10;
 
     this.gridContainer.x = offsetX;
     this.gridContainer.y = offsetY;
 
-    // Rendu du Cadre Doré & Fronton
     this.frameContainer.removeChildren();
 
-    // Fond obscurci de la grille
     const bgBox = new PIXI.Graphics();
     bgBox.roundRect(offsetX - 14, offsetY - 14, gridW + 28, gridH + 28, 16);
     bgBox.fill({ color: 0x0c0c14, alpha: 0.88 });
     bgBox.stroke({ width: 3, color: 0xd4af37, alpha: 0.9 });
     this.frameContainer.addChild(bgBox);
 
-    // Fronton Arche Dorée au sommet
     if (this.textures.gold_arch) {
       const arch = new PIXI.Sprite(this.textures.gold_arch);
       arch.anchor.set(0.5, 1);
@@ -172,29 +165,35 @@ export class SlotEngine {
     }
   }
 
-  renderGrid(gridData, winningKeys = []) {
+  // Affiche la grille actuelle avec mise en surbrillance des cellules gagnantes
+  renderGrid(gridData, winningCells = []) {
     this.gridContainer.removeChildren();
+
+    const winMap = {};
+    for (const pos of winningCells) {
+      winMap[`${pos.c},${pos.r}`] = true;
+    }
 
     for (let c = 0; c < this.cols; c++) {
       for (let r = 0; r < this.rows; r++) {
         const symKey = gridData[c][r];
+        if (!symKey) continue; // Cellule détruite en cours de tumble
+
         const texture = this.textures[symKey];
-        const isWin = winningKeys.includes(symKey);
+        const isWin = winMap[`${c},${r}`] === true;
 
         const symBox = new PIXI.Container();
         symBox.x = c * (this.symbolSize + this.spacing);
         symBox.y = r * (this.symbolSize + this.spacing);
 
-        // Halo gagnant si victoire
         if (isWin) {
           const glow = new PIXI.Graphics();
           glow.roundRect(-4, -4, this.symbolSize + 8, this.symbolSize + 8, 14);
-          glow.fill({ color: 0xffea00, alpha: 0.35 });
-          glow.stroke({ width: 3, color: 0xfff000, alpha: 0.9 });
+          glow.fill({ color: 0xffea00, alpha: 0.40 });
+          glow.stroke({ width: 3, color: 0xfff000, alpha: 0.95 });
           symBox.addChild(glow);
         }
 
-        // Texture réelle HD du symbole
         if (texture) {
           const sprite = new PIXI.Sprite(texture);
           sprite.anchor.set(0.5);
@@ -203,11 +202,7 @@ export class SlotEngine {
           
           const maxDim = Math.max(sprite.width, sprite.height);
           const scale = (this.symbolSize * 0.94) / maxDim;
-          sprite.scale.set(scale);
-
-          if (isWin) {
-            sprite.scale.set(scale * 1.12);
-          }
+          sprite.scale.set(isWin ? scale * 1.15 : scale);
 
           symBox.addChild(sprite);
         }
@@ -217,51 +212,48 @@ export class SlotEngine {
     }
   }
 
-  async animateSpin(newGrid, winningKeys = []) {
+  // Animation de la séquence complète de Tumbles (chute cascade pas-à-pas)
+  async playTumbleSequence(spinResult, onStepCallback) {
     if (this.isSpinning) return;
     this.isSpinning = true;
 
-    // Déclenchement réaction Anubis
+    // Réaction Anubis au début
     if (this.anubisSprite) {
-      this.anubisSprite.tint = 0x88ff88;
+      this.anubisSprite.tint = spinResult.isBigWin ? 0xffcc44 : 0x88ff88;
       setTimeout(() => {
         if (this.anubisSprite) this.anubisSprite.tint = 0xffffff;
-      }, 400);
+      }, 500);
     }
 
-    const duration = 240;
-    const startTime = performance.now();
+    const { steps } = spinResult;
 
-    return new Promise((resolve) => {
-      const dropStep = (now) => {
-        const progress = Math.min((now - startTime) / duration, 1);
-        this.gridContainer.alpha = 1 - progress;
+    for (let i = 0; i < steps.length; i++) {
+      const step = steps[i];
 
-        if (progress < 1) {
-          requestAnimationFrame(dropStep);
-        } else {
-          this.renderGrid(newGrid, winningKeys);
-          this.gridContainer.y -= 45;
-          this.gridContainer.alpha = 0;
+      // 1. Rendu de la grille avec les symboles gagnants illuminés
+      this.renderGrid(step.grid, step.winningCells);
 
-          const bounceStart = performance.now();
-          const bounceStep = (bNow) => {
-            const bProgress = Math.min((bNow - bounceStart) / 180, 1);
-            this.gridContainer.alpha = bProgress;
-            this.centerGridAndFrame();
+      if (onStepCallback) {
+        onStepCallback(step, i, steps.length);
+      }
 
-            if (bProgress < 1) {
-              requestAnimationFrame(bounceStep);
-            } else {
-              this.isSpinning = false;
-              resolve();
-            }
-          };
-          requestAnimationFrame(bounceStep);
-        }
-      };
-      requestAnimationFrame(dropStep);
-    });
+      if (!step.isFinal && step.winningCells.length > 0) {
+        // Pause pour voir les symboles gagnants
+        await new Promise(r => setTimeout(r, 450));
+
+        // 2. Clignotement / disparition des gagnants
+        this.renderGrid(step.grid.map((col, c) => col.map((sym, r) => {
+          const isWin = step.winningCells.some(p => p.c === c && p.r === r);
+          return isWin ? null : sym;
+        })));
+
+        await new Promise(r => setTimeout(r, 200));
+      } else {
+        await new Promise(r => setTimeout(r, 250));
+      }
+    }
+
+    this.isSpinning = false;
   }
 
   onResize() {

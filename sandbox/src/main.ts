@@ -1,6 +1,6 @@
 import './style.css';
 import { SlotEngine } from './engine/slotEngine.js';
-import { StakeEngineSimulator } from './engine/serverSimulator.js';
+import { SlotEngineMath, GAME_CONFIG } from './engine/mathEngine.js';
 
 const appEl = document.querySelector<HTMLDivElement>('#app')!;
 
@@ -20,9 +20,9 @@ appEl.innerHTML = `
 
         <!-- Bandeau Multiplicateurs façon Gates of Olympus / Fury of Anubis -->
         <div class="multiplier-bar">
-          <div class="mult-pill">x256</div>
-          <div class="mult-pill highlight" id="active-mult">x1024</div>
-          <div class="mult-pill">x2048</div>
+          <div class="mult-pill">x2</div>
+          <div class="mult-pill highlight" id="active-mult">x1</div>
+          <div class="mult-pill">x500</div>
         </div>
 
         <!-- Titre / Logo du jeu -->
@@ -34,14 +34,14 @@ appEl.innerHTML = `
 
       <!-- Bandeau Latéral Gauche : Options Bonus Stake -->
       <div class="side-controls">
-        <div class="side-btn buy-feature">
+        <div class="side-btn buy-feature" id="btn-buy-bonus">
           <span class="btn-sub">FONCTION</span>
           <span class="btn-main">ACHETER</span>
-          <span class="btn-tag">OPTIONS</span>
+          <span class="btn-tag">100X</span>
         </div>
-        <div class="side-btn super-spin">
-          <span class="btn-sub">SUPER SPIN</span>
-          <span class="btn-main">ACTIF</span>
+        <div class="side-btn super-spin" id="tumble-indicator">
+          <span class="btn-sub">CASCADE</span>
+          <span class="btn-main" id="tumble-count-val">PRÊT</span>
         </div>
       </div>
 
@@ -90,17 +90,19 @@ const balanceEl = document.getElementById('balance-val')!;
 const betEl = document.getElementById('bet-val')!;
 const winEl = document.getElementById('win-val')!;
 const activeMultEl = document.getElementById('active-mult')!;
+const tumbleCountVal = document.getElementById('tumble-count-val')!;
 const btnSpin = document.getElementById('btn-spin') as HTMLButtonElement;
 const spinIcon = document.getElementById('spin-icon')!;
 const btnMinus = document.getElementById('btn-minus') as HTMLButtonElement;
 const btnPlus = document.getElementById('btn-plus') as HTMLButtonElement;
+const btnBuyBonus = document.getElementById('btn-buy-bonus') as HTMLDivElement;
 const bigWinToggle = document.getElementById('force-bigwin-toggle') as HTMLInputElement;
 
-const simulator = new StakeEngineSimulator(6, 5);
+const math = new SlotEngineMath(GAME_CONFIG);
 const engine = new SlotEngine(canvasContainer);
 
 await engine.init();
-const initialGrid = simulator.generateGrid(false);
+const initialGrid = math.generateInitialGrid(false);
 engine.renderGrid(initialGrid);
 
 function updateUI() {
@@ -130,39 +132,60 @@ bigWinToggle.addEventListener('change', (e) => {
   forceBigWin = (e.target as HTMLInputElement).checked;
 });
 
-btnSpin.addEventListener('click', async () => {
-  if (isSpinning || balance < bet) return;
+async function triggerSpin(customBet = bet, isBonus = false) {
+  if (isSpinning || balance < customBet) return;
 
   isSpinning = true;
   btnSpin.disabled = true;
   spinIcon.classList.add('rotating');
   winEl.classList.remove('highlight');
   winEl.textContent = '0,00 $';
+  activeMultEl.textContent = 'x1';
+  tumbleCountVal.textContent = 'SPINNING';
 
-  balance -= bet;
+  balance -= customBet;
   updateUI();
 
-  const grid = simulator.generateGrid(forceBigWin);
-  const result = simulator.evaluate(grid, bet);
-  const winningKeys = result.winningSymbols.map((w: any) => w.symbol);
+  // Exécution du moteur mathématique avec calcul des cascades
+  const spinResult = math.executeFullSpin(bet, forceBigWin || isBonus);
 
-  await engine.animateSpin(grid, winningKeys);
+  let currentCumulatedWin = 0;
 
-  balance += result.finalWin;
-  winEl.textContent = `${result.finalWin.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`;
-  
-  if (result.finalWin > 0) {
-    winEl.classList.add('highlight');
-  }
+  // Jouer la séquence pas-à-pas dans PixiJS
+  await engine.playTumbleSequence(spinResult, (step: any, index: number) => {
+    tumbleCountVal.textContent = `TUMBLE ${index + 1}`;
+    currentCumulatedWin += step.stepWin;
+    if (currentCumulatedWin > 0) {
+      winEl.textContent = `${currentCumulatedWin.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`;
+      winEl.classList.add('highlight');
+    }
+  });
 
-  if (result.totalMult > 1) {
-    activeMultEl.textContent = `x${result.totalMult}`;
+  // Appliquer le multiplicateur final
+  if (spinResult.effectiveMultiplier > 1) {
+    activeMultEl.textContent = `x${spinResult.effectiveMultiplier}`;
     activeMultEl.classList.add('pulse');
     setTimeout(() => activeMultEl.classList.remove('pulse'), 1500);
   }
+
+  balance += spinResult.finalWin;
+  winEl.textContent = `${spinResult.finalWin.toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} $`;
+  tumbleCountVal.textContent = spinResult.tumbleCount > 0 ? `${spinResult.tumbleCount} WINS` : 'PRÊT';
 
   updateUI();
   isSpinning = false;
   btnSpin.disabled = false;
   spinIcon.classList.remove('rotating');
+}
+
+btnSpin.addEventListener('click', () => triggerSpin());
+
+// Bouton Bonus Buy 100x
+btnBuyBonus.addEventListener('click', () => {
+  const cost = bet * 100;
+  if (isSpinning || balance < cost) {
+    alert(`Solde insuffisant pour le Bonus Buy (${cost.toFixed(2)} $)`);
+    return;
+  }
+  triggerSpin(cost, true);
 });

@@ -312,3 +312,62 @@ Lors de l'instanciation de la scène du jeu par le runtime Pragmatic (`internalC
 - On ne crée pas de nouveaux fichiers de cadrage.
 - On conserve cette page comme journal de blocage et de résolution.
 - On signe les prochaines notes de suivi avec `CODEX`.
+
+---
+
+## Suite de conversation
+
+### Objectif confirme
+- Faire tourner une slot emulee en local.
+- Garder la base simple, stable, et modulaire.
+- Preparer plus tard le changement de jeu ou de skin sans refaire toute l'architecture.
+
+### Ce qui compte maintenant
+1. Un seul point d'entree front.
+2. Un rendu local qui charge les assets sans casser.
+3. Un flux de spin visible et coherent.
+4. Un serveur mock minimal pour soutenir le runtime local.
+5. Une configuration par jeu ou par skin, facile a remplacer.
+
+### Ce qui est hors scope pour le moment
+- RTP controller.
+- Gros simulateur math.
+- Tests unitaires exhaustifs.
+- Bonus buy.
+- Clone exact du client Pragmatic.
+- Refonte lourde tant que la version locale ne tourne pas.
+
+### Consigne pour la suite
+- Ne pas repartir de zero.
+- Ne pas compliquer le moteur avant d'avoir un emu local stable.
+- Prioriser la fiabilite du chargement, du rendu et de l'UI.
+- Garder cette note comme reference de conversation pour la suite.
+
+---
+
+## Rapport d'exécution CODEX (Alignement & Stabilisation Émulateur Local)
+
+### Actions Réalisées :
+1. **Moteur Modulaire & Configuration par Jeu (`sandbox/src/engine/mathEngine.js`) :**
+   - Implémentation d'une structure `GAME_CONFIG` indépendante pour *Fury of Anubis* (facilement modifiable pour d'autres skins/jeux).
+   - Prise en compte de la grille 6×5 en **Pay-Anywhere** (clusters de symboles $\ge 8$).
+   - Séquenceur de **Tumble / Cascade** : détection des gagnants $\to$ destruction $\to$ chute par gravité $\to$ génération des nouveaux symboles.
+   - Gestion des orbes multiplicateurs accumulés pendant la séquence.
+
+2. **Rendu Visuel Réactif & Séquentiel (`sandbox/src/engine/slotEngine.js`) :**
+   - Mise à jour de `playTumbleSequence()` dans PixiJS : chaque étape de cascade est animée visuellement (mise en surbrillance des clusters gagnants avec halo doré, pause de destruction, actualisation du flux).
+   - Stabilisation du responsive desktop et de l'animation d'Anubis.
+
+3. **Interface & Handshake Front (`sandbox/src/main.ts`) :**
+   - Point d'entrée front unique opérationnel sur `http://localhost:5173/`.
+   - Indicateur dynamique de Tumbles (`TUMBLE 1`, `TUMBLE 2`...).
+   - Gestion de la balance, de la mise, de l'accumulation des gains et du multiplicateur final.
+   - Validation stricte de la compilation TypeScript (`tsc --noEmit` avec 0 erreur).
+
+### État de la Sandbox Locale :
+- **Serveur Vite démarré** : `http://localhost:5173/`
+- **Rendu fonctionnel** : textures chargées, grille interactive, cascade animée en temps réel.
+- **Règle respectée** : base légère, propre, découplée des lourdeurs de reverse du bundle Pragmatic propriétaire.
+
+*Signé : CODEX*
+

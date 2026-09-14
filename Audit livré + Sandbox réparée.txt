@@ -1,0 +1,146 @@
+Audit livré + Sandbox réparée
+
+Ce qui a été fait :
+
+    /app/AUDIT.md : rapport complet — direction VEO à 50 % OK, pragmatic_runner/ est une impasse technique (WebGL bindBuffer + 26k composants Unity-en-JS), la sandbox est le vrai chemin.
+    /app/RUN.md : instructions exactes pour lancer sandbox (cd sandbox && yarn install && yarn dev → http://localhost:5173) + notes sur pragmatic_runner.
+    Sandbox réparée : versions Vite/TS/Svelte inventées corrigées, plugin Svelte ajouté, entrée unifiée (Svelte, suppression du HUD vanilla dupliqué), tsconfig simplifié. Vérifié : yarn build OK, spin fonctionnel (screenshot : grille 6×5 avec vrais symboles Fury of Anubis, Anubis animé, balance $1000→$999, multiplicateur x2).
+
+Diagnostic clé : VEO a bien fait le mock RGS et l'extraction, mais s'est enlisé à essayer de faire tourner le vrai client Pragmatic — infaisable sans plusieurs semaines de reverse WebGL/Unity-en-JS spécialisé, et inutile pour ton objectif de construire une slot originale.
+
+Prochaines actions (à choisir) :
+
+    Vrai Reel Spin: Ajoute une animation de rouleaux colonne par colonne qui défilent avec easing pour donner le vrai feel casino
+    Serveur RGS Local: Sépare la math du client en un serveur Node qui parle le protocole Pragmatic exact pour que le vrai client puisse un jour s'y brancher
+    Tumble Cascade: Ajoute la mécanique de chute des symboles gagnants avec cascade façon Fury of Anubis et Sweet Bonanza
+    RTP Controller: Donne-toi un dashboard pour ajuster en direct le RTP, forcer scatter, forcer multiplier et injecter des scénarios prédéterminés
+
+ c'est très loin d'une vraie slot. C'est un placeholder statique. Voici ce qu'il faut réellement pour une simulation sérieuse et fidèle à Fury of Anubis.
+Roadmap — Simulation sérieuse de Fury of Anubis
+0. Ce qu'est vraiment Fury of Anubis (rappel technique)
+
+C'est un cluster/pay-anywhere tumble dans la famille de Sweet Bonanza / Gates of Olympus, pas une slot à lignes classiques :
+
+    Grille 6×5, gain dès 8 symboles identiques n'importe où sur la grille.
+    Tumble/cascade : les symboles gagnants disparaissent, de nouveaux tombent du haut, on ré-évalue, on recommence tant qu'il y a un gain.
+    Multiplicateurs "Wrath" : des symboles multiplicateur (2× à 500×) apparaissent, s'accumulent dans un pool pendant toute la séquence de tumble, et s'appliquent à la somme totale gagnée au moment où la séquence se termine.
+    Scatter Anubis : 4+ scatters → Free Spins (généralement 15 spins).
+    En Free Spins : les multiplicateurs deviennent sticky (ils restent en jeu) et le pool ne se remet pas à zéro entre les tumbles.
+    Bonus Buy : ~100× la mise pour déclencher directement les FS, ~200× pour une variante super.
+    RTP cible : 96.5% (version standard), variance très haute, max win ≈ 5000×.
+
+Rien de tout ça n'existe dans la sandbox actuelle. La sandbox actuelle est un tirage random + comptage naïf, sans tumble, sans reel spin, sans multiplicateur sticky, sans free spin, sans bonus buy, sans RTP contrôlé.
+1. Ce qui manque, par couche
+A. Moteur mathématique (le plus important — c'est ça qui définit "une slot")
+Manque	Ce qu'il faut	Complexité
+Reel strips	6 tableaux pondérés d'environ 100-300 symboles chacun. C'est la vraie source du RTP.	⭐⭐
+Tirage par colonne	Actuellement Math.random() uniforme sur 9 symboles. Doit devenir : pour chaque colonne, on avance de N positions sur son reel strip et on lit 5 symboles consécutifs.	⭐⭐
+Paytable réelle	Payouts multipliés par mise, par nombre de symboles (8-9, 10-11, 12+). Voir la vraie paytable de vs20wraanu (extractible de game*.json).	⭐
+Évaluation cluster	OK sur le principe actuel, mais doit rendre les positions exactes des symboles gagnants pour l'animation.	⭐⭐
+Séquence de tumble	Boucle : évaluer → retirer les gagnants → faire tomber les symboles restants → remplir le haut → ré-évaluer. Jusqu'à zéro gain.	⭐⭐⭐
+Wrath multipliers	Symbole spécial qui apparaît (typiquement 1-6% de chance par cellule vide), avec une valeur pondérée (2× le plus fréquent, 500× ultra rare). Accumulé dans un pool.	⭐⭐⭐
+Free Spins state machine	Compteur de spins restants, pool de mult persistant, gestion des retriggers (+5 FS si 3+ scatters pendant les FS).	⭐⭐⭐
+Bonus Buy	Endpoint dédié qui déduit ~100× bet et entre directement en FS.	⭐
+Contrôleur RTP	Générateur qui, à partir de scénarios prédéfinis + poids, produit un RTP mesuré cible (96.5% par exemple). Nécessite un RTP simulator qui joue 10M spins et affiche le RTP réel.	⭐⭐⭐⭐
+B. Rendu / animation (le "feel" du casino)
+Manque	Ce qu'il faut	Complexité
+Reel spin animé	Colonnes qui défilent avec motion blur, easing bounce en fin, décalé par colonne (colonne 1 s'arrête avant colonne 6). Actuellement : fondu enchaîné cheap.	⭐⭐⭐
+Tumble anim	Symboles gagnants qui explosent en particules → gap → symboles restants qui tombent avec gravité → nouveaux symboles depuis le haut.	⭐⭐⭐⭐
+Win presentation	Halo animé sur chaque symbole gagnant, compteur de gain qui monte, texte "BIG WIN / MEGA WIN / EPIC WIN / ULTIMATE WIN" selon seuils (10×, 25×, 50×, 100× bet).	⭐⭐⭐
+Wrath bar	Barre/pool à droite qui collecte les multiplicateurs pendant le tumble, avec animation d'ajout et flash final.	⭐⭐
+Anubis réactions	Idle breathe (déjà là), attack (frappe pendant les gros wins), rage (pendant les FS). Actuellement : juste un tint vert.	⭐⭐⭐
+Free Spins UI	Écran d'intro "You won 15 Free Spins!", HUD dédié pendant les FS (compteur de spins, pool de mult sticky visible), écran d'outro "Total win X€".	⭐⭐⭐
+Bonus Buy modal	Bouton "BUY FEATURE" (déjà côté screenshot), popup avec 3 options : FS 100×, Super FS 200×, Ante Bet, confirmation.	⭐⭐
+Sons	Spin loop, symbol land clicks, tumble whoosh, coin jingle sur win, fanfare big win, drums pour bonus trigger. Assets audio existent déjà dans extracted_fury_of_anubis/.	⭐⭐
+Paytable modal	Bouton "i", popup avec les payouts de chaque symbole. Data extractible de la vraie paytable.	⭐
+Autoplay	10/25/50/100 spins, avec stop conditions (single win > X, balance < Y, bonus trigger).	⭐⭐
+Turbo mode	Skip animations, accélère × 3-5.	⭐
+C. Architecture / protocole (pour être extensible)
+Manque	Ce qu'il faut	Complexité
+Séparation client/serveur réelle	Actuellement serverSimulator.js tourne dans le navigateur. Doit devenir un vrai backend Node.js/Express qui répond en HTTP avec le protocole Pragmatic (s=, sa=, sb=, w=, fs=, na=, wm=, mo=).	⭐⭐⭐
+State serveur	Balance, session key, historique, seed RNG — persistés (JSON file OK pour commencer, MongoDB pour scaler).	⭐⭐
+Payload tumble complet	Un seul doSpin doit renvoyer toute la séquence de tumbles en une réponse (comme Pragmatic le fait) pour que le client anime tout en séquence sans re-questionner.	⭐⭐⭐
+Historique / audit	Endpoint /history qui liste les N derniers spins avec seeds, pour reproductibilité.	⭐⭐
+Config par jeu	Fichier games/vs20wraanu/config.json avec reel strips, paytable, weights, symbols. Permet plus tard de cloner sur vs20fruitsw, vs20olympgate.	⭐⭐
+D. QA / mesure
+Manque	Ce qu'il faut	Complexité
+RTP simulator	Script Node qui joue 10M spins sans rendu, remonte : RTP réel, hit frequency, FS trigger rate, distribution des wins, max win vu, écart-type.	⭐⭐⭐
+Tests unitaires math	100% de couverture sur l'évaluateur cluster, le tumble, le pool de multiplicateurs. Une erreur ici = jeu injouable ou RTP faux.	⭐⭐
+Validation payload	JSON schema du payload doSpin pour garantir que le client reçoit tous les champs attendus.	⭐
+2. Plan de travail structuré (5 phases)
+Phase 1 — Fondations math (1 semaine)
+
+Objectif : Le serveur produit des payloads Pragmatic-compatibles avec une math cluster+tumble+multiplicateurs sur RTP mesuré.
+
+Livrables :
+
+    sandbox-server/ (nouveau) : Express Node.js, endpoints doInit, doSpin, doCollect.
+    games/vs20wraanu/config.json : reel strips + paytable + weights (extraits ou reconstruits depuis les JSON Pragmatic déjà dans le repo).
+    engine/cluster.ts : évaluateur cluster (retourne positions gagnantes).
+    engine/tumble.ts : séquenceur de tumble complet.
+    engine/wrath.ts : gestion pool de multiplicateurs.
+    engine/rng.ts : RNG seedé (mulberry32 ou équivalent).
+    tools/rtp-sim.ts : simulateur qui joue 1M spins et affiche RTP mesuré + stats.
+
+Critère de succès : RTP simulé sur 1M spins = 96.5% ± 0.5%.
+Phase 2 — Free Spins & Bonus Buy (3-4 jours)
+
+Objectif : Cycle complet FS + BB.
+
+Livrables :
+
+    State machine FS côté serveur (sticky mult persistant).
+    Retrigger (+5 FS si 3+ scatters pendant FS).
+    Endpoint doBuyBonus (100× bet → entre en FS immédiatement).
+    Payload FS complet dans la réponse (fs=N, wm=X,Y,Z liste de mult sticky, fs_left=N).
+
+Critère de succès : FS trigger rate mesuré ~1/200 spins, RTP FS + base = 96.5%.
+Phase 3 — Rendu client sérieux (2 semaines)
+
+Objectif : Le client ressemble à une vraie slot, pas à un mockup.
+
+Livrables :
+
+    SlotEngine refonte : composant Reel autonome par colonne avec scroll animé + easing.
+    TumbleController : orchestre explosion → chute → refill.
+    WinPresenter : halo + compteur qui monte + big/mega/epic/ultimate.
+    WrathBar UI (Svelte) qui écoute les events du moteur.
+    AnubisController : states idle/attack/rage.
+    SoundManager avec Howler.js (sons déjà extraits dans extracted_fury_of_anubis/).
+    PaytableModal, BuyBonusModal, AutoplayPanel.
+
+Critère de succès : side-by-side avec une vidéo YouTube de Fury of Anubis, feeling comparable à 70%.
+Phase 4 — Free Spins UI & polish (1 semaine)
+
+Livrables :
+
+    Intro screen "You won 15 Free Spins".
+    HUD FS avec compteur + pool visible + Anubis rage.
+    Outro screen "Total win 250.00 €".
+    Turbo mode.
+    Autoplay avec stop conditions.
+
+Phase 5 — Généralisation à d'autres slots (1 semaine)
+
+Livrables :
+
+    Pipeline tools/import-pragmatic-game.ts qui, depuis un dossier extracted_XYZ/, génère games/XYZ/config.json.
+    Documentation PROTOCOL.md complète du payload Pragmatic.
+    Deuxième jeu porté en preuve de généricité (Sweet Bonanza vs20fruitsw par exemple).
+
+3. Effort total réaliste
+
+    Version jouable "belle" (Phases 1+2+3) : ~3-4 semaines en focused dev solo.
+    Version publiable comparable au vrai jeu (Phases 1→4) : ~5-6 semaines.
+    Framework généralisé multi-jeux (Phases 1→5) : ~7-8 semaines.
+
+À titre de comparaison : Pragmatic emploie une équipe de ~10 personnes (math, dev client, dev serveur, art, sound, QA) sur ~6 mois par jeu. Notre avantage : on ne redéveloppe pas l'infra bancaire, la certif RNG, ni la conformité juridiction — juste le moteur et le rendu.
+4. Ce que je te recommande de décider maintenant
+
+Choisis un scope réaliste avant qu'on écrive une ligne de plus. Deux options :
+
+Option A — "MVP jouable en 1 semaine" : Phase 1 uniquement. Serveur math correct + tumble + multiplicateurs + RTP mesuré, mais rendu client reste basique (comme actuellement). C'est utile parce que ça verrouille la math (le vrai enjeu d'une slot) et te donne un outil de simulation RTP direct.
+
+Option B — "MVP montrable en 3 semaines" : Phases 1+2+3. Là tu as un truc qui ressemble vraiment à Fury of Anubis, avec tumble animé, wrath bar, FS, BB. C'est ce qu'il faut pour un vrai prototype démontrable.
+
+Option C — "Full clone en 6 semaines" : Phases 1→4. Publiable en démo.
